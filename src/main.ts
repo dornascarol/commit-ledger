@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { InMemoryEventBus } from "./events/event-bus.js";
 import { registerTransactionRoutes } from "./infra/http/routes/transactions.js";
 import { registerAccountRoutes } from "./infra/http/routes/accounts.js";
+import { registerUserRoutes } from "./infra/http/routes/users.js";
 
 const app = Fastify({ logger: true });
 const eventBus = new InMemoryEventBus();
@@ -14,6 +15,7 @@ eventBus.subscribe((event) => {
 
 registerTransactionRoutes(app, eventBus);
 registerAccountRoutes(app);
+registerUserRoutes(app);
 
 const port = Number(process.env.PORT ?? 3000);
 
