@@ -38,6 +38,12 @@ export class UserNotFoundError extends DomainError {
   }
 }
 
+export class TransactionNotFoundError extends DomainError {
+  constructor(transactionId: string) {
+    super(`Transaction ${transactionId} not found.`, "TRANSACTION_NOT_FOUND");
+  }
+}
+
 export class DuplicateCpfError extends DomainError {
   constructor() {
     super("A user with this CPF already exists.", "DUPLICATE_CPF");
