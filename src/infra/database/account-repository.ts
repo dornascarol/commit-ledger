@@ -20,6 +20,10 @@ export class AccountRepository {
     return this.db.account.findUnique({ where: { id } });
   }
 
+  async findByUserId(userId: string) {
+    return this.db.account.findMany({ where: { userId } });
+  }
+
   async create(data: { userId: string }) {
     const accountNumber = await this.generateAccountNumber();
     return this.db.account.create({

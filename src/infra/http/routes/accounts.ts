@@ -3,6 +3,7 @@ import { z } from "zod";
 import { GetBalanceQuery } from "../../../queries/get-balance.js";
 import { GetAccountEntriesQuery } from "../../../queries/get-account-entries.js";
 import { CreateAccountCommand } from "../../../commands/create-account.js";
+import { CreateDepositCommand } from "../../../commands/create-deposit.js";
 import { DomainError } from "../../../domain/errors/domain-errors.js";
 import { AccountRepository } from "../../database/account-repository.js";
 import { UserRepository } from "../../database/user-repository.js";
@@ -14,6 +15,10 @@ const listEntriesQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
 });
+const depositSchema = z.object({
+  amountCents: z.number().int().positive(),
+  description: z.string().optional(),
+});
 
 export function registerAccountRoutes(app: FastifyInstance) {
   const accounts = new AccountRepository(prisma);
@@ -21,6 +26,7 @@ export function registerAccountRoutes(app: FastifyInstance) {
   const getBalance = new GetBalanceQuery(accounts);
   const getEntries = new GetAccountEntriesQuery(accounts);
   const createAccount = new CreateAccountCommand(accounts, users);
+  const createDeposit = new CreateDepositCommand(prisma);
 
   app.post("/accounts", async (request, reply) => {
     const body = createAccountSchema.parse(request.body);
@@ -42,6 +48,24 @@ export function registerAccountRoutes(app: FastifyInstance) {
     try {
       const result = await getBalance.execute(id);
       return reply.status(200).send(result);
+    } catch (error) {
+      if (error instanceof DomainError) {
+        return reply.status(422).send({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
+
+  // ⚠️ TEST-ONLY: seeds an account with funds via a single unbalanced
+  // credit entry. See CreateDepositCommand for why this breaks the
+  // double-entry invariant and will be replaced in phase 2.
+  app.post("/accounts/:id/deposit", async (request, reply) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const body = depositSchema.parse(request.body);
+
+    try {
+      const result = await createDeposit.execute({ accountId: id, ...body });
+      return reply.status(201).send(result);
     } catch (error) {
       if (error instanceof DomainError) {
         return reply.status(422).send({ error: error.code, message: error.message });

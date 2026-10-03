@@ -36,6 +36,13 @@ model Account {
 
 enum TransactionType {
   internal_transfer
+  /// TEST-ONLY: a single-sided credit used to seed an account with funds
+  /// for manual/local testing. Does NOT have a balancing debit entry, so
+  /// it intentionally breaks the double-entry invariant. Do not use this
+  /// as a model for real money movement — phase 2 (external accounts)
+  /// will replace this with a proper balanced external_pix/external_ted
+  /// transaction.
+  deposit
 }
 
 enum TransactionStatus {
