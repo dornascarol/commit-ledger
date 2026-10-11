@@ -8,7 +8,7 @@ architecture, and domain modeling for money.
 > control sense, and a *commit* in the database-transaction sense — the moment
 > a transfer is confirmed and becomes part of the ledger's permanent history.
 
-## What it does (v0.1 — internal transfers)
+## What it does (v0.1 — internal transfers) ✅
 
 - Users can register and open up to **two accounts** each (mirroring a
   real-world checking + savings account pair at the same bank).
@@ -20,6 +20,8 @@ architecture, and domain modeling for money.
 - Every transaction publishes domain events (`TransactionRequested`,
   `TransactionCompleted`, `TransactionRejected`), so the write path is
   event-driven from day one, even before a real message broker is introduced.
+- Covered by unit tests (domain logic) and integration tests (full HTTP flow
+  against a real, isolated test database).
 
 ## Key design decisions
 
@@ -38,6 +40,17 @@ architecture, and domain modeling for money.
   later means writing one new class, with no changes to the commands or
   queries layer.
 
+## Known trade-offs (conscious technical debt)
+
+- **`POST /accounts/:id/deposit`** is a test-only shortcut: it creates a
+  single credit entry with no balancing debit, intentionally breaking the
+  double-entry invariant. It exists only to seed accounts with funds for
+  manual testing until phase 2 introduces a proper external account. See the
+  comments in `src/commands/create-deposit.ts`.
+- **Prisma 7 migration**: the installed version (5.x) already warns that the
+  `datasource.url` schema syntax will change in a future major version.
+  Deliberately deferred — not worth a structural change mid-MVP.
+
 ## Roadmap
 
 - [x] v0.1 — internal transfers between a user's own accounts
@@ -47,7 +60,7 @@ architecture, and domain modeling for money.
 
 ## Tech stack
 
-Node.js, TypeScript, Fastify, Prisma, PostgreSQL, Zod, Vitest.
+Node.js (22 LTS), TypeScript, Fastify, Prisma, PostgreSQL, Zod, Vitest.
 
 ## Getting started
 
@@ -56,21 +69,38 @@ cp .env.example .env
 docker compose up -d          # starts Postgres
 npm install
 npm run prisma:migrate        # creates the database schema
+npm run prisma:seed           # optional: populates sample users/accounts
 npm run dev                   # starts the API on http://localhost:3000
 ```
 
-Run the test suite:
+### Running the tests
 
 ```bash
-npm test
+npm test                      # unit tests — pure domain logic, no database needed
+```
+
+Integration tests run against a **separate** database (`commitledger_test`),
+truncated before every test, so they never touch the data you use for manual
+testing:
+
+```bash
+docker exec -it commitledger createdb -U commitledger commitledger_test   # once
+npm run prisma:migrate:test                                               # once (or after schema changes)
+npm run test:integration
 ```
 
 ## API
 
-| Method | Endpoint                  | Description                          |
-| ------ | -------------------------- | ------------------------------------- |
-| POST   | `/transactions`             | Create an internal transfer           |
-| GET    | `/accounts/:id/balance`     | Get an account's current balance      |
+| Method | Endpoint                 | Description                                |
+| ------ | -------------------------- | --------------------------------------------- |
+| POST   | `/users`                    | Register a user                               |
+| GET    | `/users/:id/accounts`       | List a user's accounts                         |
+| POST   | `/accounts`                 | Open an account for a user (max 2 per user)    |
+| GET    | `/accounts/:id/balance`     | Get an account's current balance               |
+| GET    | `/accounts/:id/entries`     | Paginated statement (debit/credit history)      |
+| POST   | `/accounts/:id/deposit`     | ⚠️ Test-only: seed an account with funds        |
+| POST   | `/transactions`             | Create an internal transfer                      |
+| GET    | `/transactions/:id`         | Get a transaction with its entries                |
 
 ### `POST /transactions`
 
@@ -101,5 +131,14 @@ src/
 ├── infra/
 │   ├── database/  # Prisma client and repositories
 │   └── http/      # Fastify routes
-└── main.ts
+├── app.ts         # builds the Fastify app (used by main.ts and tests)
+└── main.ts        # entrypoint: builds the app and starts the HTTP server
+
+tests/
+├── ledger.test.ts         # unit tests — pure domain logic
+└── integration/            # full HTTP + database tests, separate test DB
+
+prisma/
+├── schema.prisma
+└── seed.ts         # populates sample data for local development
 ```
